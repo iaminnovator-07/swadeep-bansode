@@ -75,167 +75,47 @@ export const Route = createFileRoute("/api/chat")({
         try { body = await request.json(); } catch { /* ignore */ }
         const messages = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
 
-        // Resolve API key: UI input takes priority, then .env / host bindings
+        // Resolve Groq API key: headers fallback, then .env / host bindings
         const apiKey =
           request.headers.get("x-openai-key") ||
           process.env.GROQ_API_KEY ||
           import.meta.env.GROQ_API_KEY ||
           import.meta.env.VITE_GROQ_API_KEY ||
-          process.env.GEMINI_API_KEY ||
-          import.meta.env.GEMINI_API_KEY ||
-          import.meta.env.VITE_GEMINI_API_KEY ||
-          process.env.OPENAI_API_KEY ||
-          import.meta.env.OPENAI_API_KEY ||
-          import.meta.env.VITE_OPENAI_API_KEY ||
           "";
 
-        const isGroq   = apiKey.startsWith("gsk_");
-        const isGemini = apiKey.startsWith("AIzaSy");
-
-        console.log("AURORA API:", {
-          provider: isGroq ? "Groq" : isGemini ? "Gemini" : "OpenAI",
+        console.log("AURORA API (Groq Only Mode):", {
           keyPreview: apiKey ? apiKey.slice(0, 8) + "..." : "MISSING",
           messageCount: messages.length,
         });
 
         if (!apiKey) {
           return new Response(
-            JSON.stringify({ error: "No API key. Please configure the GROQ_API_KEY or GEMINI_API_KEY environment variable on the server." }),
+            JSON.stringify({ error: "No Groq API key configured. Please configure the GROQ_API_KEY environment variable on the server." }),
             { status: 401, headers: { "Content-Type": "application/json" } }
           );
         }
 
-        // ── GROQ PATH (OpenAI-compatible, ultra-fast) ─────────────────
-        if (isGroq) {
-          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "llama-3.3-70b-versatile",
-              stream: true,
-              messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-            }),
-          });
-
-          if (!groqRes.ok || !groqRes.body) {
-            const text = await groqRes.text().catch(() => "");
-            console.error("Groq Error:", groqRes.status, text);
-            return new Response(text || "Groq API error", { status: groqRes.status || 502 });
-          }
-
-          // Groq streams in OpenAI SSE format — pass through directly
-          return new Response(groqRes.body, {
-            status: 200,
-            headers: {
-              "Content-Type": "text/event-stream",
-              "Cache-Control": "no-cache, no-transform",
-              Connection: "keep-alive",
-            },
-          });
-        }
-
-        // ── GEMINI PATH ────────────────────────────────────────────────
-        if (isGemini) {
-          // Use generateContent (non-streaming) which is most reliable
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-
-          const contents = messages
-            .filter(m => m.role !== "system")
-            .map(m => ({
-              role: m.role === "assistant" ? "model" : "user",
-              parts: [{ text: m.content }],
-            }));
-
-          // Ensure we have at least one user message
-          if (contents.length === 0) {
-            contents.push({ role: "user", parts: [{ text: "Hello" }] });
-          }
-
-          const geminiRes = await fetch(geminiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-              contents,
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 512,
-              },
-            }),
-          });
-
-          const geminiBody = await geminiRes.text();
-
-          if (!geminiRes.ok) {
-            console.error("Gemini Error:", geminiRes.status, geminiBody);
-            return new Response(
-              `Gemini API error ${geminiRes.status}: ${geminiBody}`,
-              { status: 502 }
-            );
-          }
-
-          let replyText = "";
-          try {
-            const j = JSON.parse(geminiBody);
-            replyText = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          } catch (e) {
-            console.error("Gemini JSON parse error:", e, geminiBody);
-            return new Response("Failed to parse Gemini response", { status: 502 });
-          }
-
-          if (!replyText) {
-            console.error("Gemini empty reply:", geminiBody);
-            return new Response("Gemini returned an empty response", { status: 502 });
-          }
-
-          // Stream the reply back character-by-character (fake stream for smooth UI)
-          const encoder = new TextEncoder();
-          const { readable, writable } = new TransformStream();
-          const writer = writable.getWriter();
-
-          (async () => {
-            // Send whole reply as one SSE chunk for simplicity
-            const chunk = { choices: [{ delta: { content: replyText } }] };
-            await writer.write(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-            await writer.write(encoder.encode("data: [DONE]\n\n"));
-            writer.close();
-          })();
-
-          return new Response(readable, {
-            status: 200,
-            headers: {
-              "Content-Type": "text/event-stream",
-              "Cache-Control": "no-cache, no-transform",
-              Connection: "keep-alive",
-            },
-          });
-        }
-
-        // ── OPENAI PATH ────────────────────────────────────────────────
-        const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: "gpt-4o",
+            model: "llama-3.3-70b-versatile",
             stream: true,
             messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
           }),
         });
 
-        if (!openaiRes.ok || !openaiRes.body) {
-          const text = await openaiRes.text().catch(() => "");
-          console.error("OpenAI Error:", openaiRes.status, text);
-          return new Response(text || "OpenAI upstream error", { status: openaiRes.status || 502 });
+        if (!groqRes.ok || !groqRes.body) {
+          const text = await groqRes.text().catch(() => "");
+          console.error("Groq Error:", groqRes.status, text);
+          return new Response(text || "Groq API error", { status: groqRes.status || 502 });
         }
 
-        return new Response(openaiRes.body, {
+        // Groq streams in OpenAI SSE format — pass through directly
+        return new Response(groqRes.body, {
           status: 200,
           headers: {
             "Content-Type": "text/event-stream",
