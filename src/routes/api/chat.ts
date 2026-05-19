@@ -75,12 +75,18 @@ export const Route = createFileRoute("/api/chat")({
         try { body = await request.json(); } catch { /* ignore */ }
         const messages = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
 
-        // Resolve API key: UI input takes priority, then .env
+        // Resolve API key: UI input takes priority, then .env / host bindings
         const apiKey =
           request.headers.get("x-openai-key") ||
           process.env.GROQ_API_KEY ||
+          import.meta.env.GROQ_API_KEY ||
+          import.meta.env.VITE_GROQ_API_KEY ||
           process.env.GEMINI_API_KEY ||
+          import.meta.env.GEMINI_API_KEY ||
+          import.meta.env.VITE_GEMINI_API_KEY ||
           process.env.OPENAI_API_KEY ||
+          import.meta.env.OPENAI_API_KEY ||
+          import.meta.env.VITE_OPENAI_API_KEY ||
           "";
 
         const isGroq   = apiKey.startsWith("gsk_");
@@ -94,7 +100,7 @@ export const Route = createFileRoute("/api/chat")({
 
         if (!apiKey) {
           return new Response(
-            JSON.stringify({ error: "No API key. Open Aurora settings (gear icon) and paste your Groq/Gemini/OpenAI API key." }),
+            JSON.stringify({ error: "No API key. Please configure the GROQ_API_KEY or GEMINI_API_KEY environment variable on the server." }),
             { status: 401, headers: { "Content-Type": "application/json" } }
           );
         }
