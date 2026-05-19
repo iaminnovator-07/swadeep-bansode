@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 import { TIMELINE_DATA, ACHIEVEMENTS, SKILLS, PROFILE, HARDWARE_PROJECTS, SOFTWARE_PROJECTS } from "@/data/portfolio";
+import fs from "fs";
+import path from "path";
 
 type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -67,6 +69,34 @@ ${KNOWLEDGE_BASE}
 `;
 
 
+function getLocalEnvKey(key: string): string {
+  try {
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf-8");
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const index = trimmed.indexOf("=");
+        if (index !== -1) {
+          const k = trimmed.substring(0, index).trim();
+          let v = trimmed.substring(index + 1).trim();
+          if (v.startsWith('"') && v.endsWith('"')) {
+            v = v.slice(1, -1);
+          } else if (v.startsWith("'") && v.endsWith("'")) {
+            v = v.slice(1, -1);
+          }
+          if (k === key) return v;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Failed to parse env file:", e);
+  }
+  return "";
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -81,6 +111,7 @@ export const Route = createFileRoute("/api/chat")({
           process.env.GROQ_API_KEY ||
           import.meta.env.GROQ_API_KEY ||
           import.meta.env.VITE_GROQ_API_KEY ||
+          getLocalEnvKey("GROQ_API_KEY") ||
           "";
 
         console.log("AURORA API (Groq Only Mode):", {
