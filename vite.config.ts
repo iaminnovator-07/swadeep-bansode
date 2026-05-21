@@ -6,19 +6,19 @@ import tailwindcss from "@tailwindcss/vite";
 
 import tsconfigPaths from "vite-tsconfig-paths";
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 export default defineConfig({
-  plugins: [
-    tanstackStart({
-      server: { 
-        preset: "vercel",
-        entry: "src/server.ts" 
-      },
-    }),
-    react(),
-    tailwindcss(),
-    tsconfigPaths(),
-  ],
+  plugins: [tanstackStart({
+    server: { 
+      preset: "vercel",
+      entry: "src/server.ts" 
+    },
+  }), react(), tailwindcss(), tsconfigPaths(), cloudflare({
+    viteEnvironment: {
+      name: "ssr"
+    }
+  })],
 
 
 });
-
