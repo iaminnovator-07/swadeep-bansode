@@ -9,11 +9,13 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [
     tanstackStart({
-      server: { 
+      preset: "vercel",
+      server: {
         preset: "vercel",
-        entry: "src/server.ts" 
+        entry: "src/server.ts"
       },
     }),
+    TanStackRouterVite(),
     react(),
     tailwindcss(),
     tsconfigPaths(),
@@ -21,4 +23,3 @@ export default defineConfig({
 
 
 });
-
