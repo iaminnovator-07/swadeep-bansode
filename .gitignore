@@ -34,3 +34,6 @@ dist-ssr
 # Environment configurations
 .env
 .env.*
+
+.vercel
+.env*.local
